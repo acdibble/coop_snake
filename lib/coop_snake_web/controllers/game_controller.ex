@@ -4,70 +4,56 @@ defmodule CoopSnakeWeb.GameController do
   @impl true
   def mount(_params, _session, socket) do
     if connected?(socket) do
-      Phoenix.PubSub.subscribe(CoopSnake.PubSub, "click_count")
-      Phoenix.PubSub.subscribe(CoopSnake.PubSub, "user_count")
-      CoopSnake.Monitor.monitor(self())
+      Phoenix.PubSub.subscribe(CoopSnake.PubSub, "toggled")
+      # CoopSnake.Monitor.monitor(self())
     end
-
-    %{click_count: click_count, user_count: user_count} = CoopSnake.Store.value()
 
     {
       :ok,
-      socket
-      |> assign(:click_count, click_count)
-      |> assign(:user_count, user_count)
+      assign(socket, :board, CoopSnake.Board.value()),
+      temporary_assigns: [board: %{}]
     }
   end
 
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="flex flex-col space-x-2">
-      <h1 class="underline text-3xl uppercase">Hello</h1>
-      <div>Count: <%= @click_count %></div>
-      <div class="flex space-x-2">
-        <button
-          type="button"
-          class="bg-green-500 h-5 w-5 flex items-center justify-center rounded"
-          phx-click="inc"
-        >
-          <span>+</span>
-        </button>
-        <button
-          type="button"
-          class="bg-red-500 h-5 w-5 flex items-center justify-center rounded"
-          phx-click="dec"
-        >
-          <span>-</span>
-        </button>
+    <div class="flex flex-col min-h-screen w-full items-center justify-center">
+      <div class="flex flex-col space-y-5 items-center">
+        <h1 class="underline text-3xl uppercase">Hello</h1>
+        <div id="board" class="grid grid-cols-10" phx-update="append">
+          <%= for {id, state} <- Enum.to_list(@board) |> Enum.sort() do %>
+            <div
+              id={id}
+              class={class_names([
+                "h-10 w-10 outline outline-1",
+                {"bg-red-500", state == :off},
+                {"bg-green-500", state == :on},
+              ])}
+              phx-click="toggle"
+              phx-value-id={id}
+            >
+            </div>
+          <% end %>
+        </div>
       </div>
-      <span>Users: <%= @user_count %></span>
     </div>
     """
   end
 
   @impl true
-  def handle_event("inc", _params, socket) do
-    CoopSnake.Store.increment(:click_count)
+  def handle_event("toggle", %{"id" => id}, socket) do
+    CoopSnake.Board.toggle_cell(id)
 
     {:noreply, socket}
   end
 
   @impl true
-  def handle_event("dec", _params, socket) do
-    CoopSnake.Store.decrement(:click_count)
-
-    {:noreply, socket}
-  end
-
-  @impl true
-  def handle_info({:click_count, new_count}, socket) do
-    {:noreply, update(socket, :click_count, fn _ -> new_count end)}
-  end
-
-  @impl true
-  def handle_info({:user_count, new_count}, socket) do
-    {:noreply, update(socket, :user_count, fn _ -> new_count end)}
+  def handle_info({:toggled, {key, value}}, socket) do
+    {
+      :noreply,
+      update(socket, :board, &Map.put(&1, key, value))
+    }
   end
 
   def class_names(list) do

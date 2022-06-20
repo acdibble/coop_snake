@@ -16,7 +16,7 @@ defmodule CoopSnake.Application do
       CoopSnakeWeb.Endpoint,
       # Start a worker by calling: CoopSnake.Worker.start_link(arg)
       # {CoopSnake.Worker, arg}
-      CoopSnake.Store,
+      CoopSnake.Board,
       CoopSnake.Monitor
     ]
 
