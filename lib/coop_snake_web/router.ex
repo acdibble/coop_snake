@@ -17,7 +17,7 @@ defmodule CoopSnakeWeb.Router do
   scope "/", CoopSnakeWeb do
     pipe_through :browser
 
-    get "/", PageController, :index
+    live "/", GameController
   end
 
   # Other scopes may use custom stacks.

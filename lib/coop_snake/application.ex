@@ -13,9 +13,11 @@ defmodule CoopSnake.Application do
       # Start the PubSub system
       {Phoenix.PubSub, name: CoopSnake.PubSub},
       # Start the Endpoint (http/https)
-      CoopSnakeWeb.Endpoint
+      CoopSnakeWeb.Endpoint,
       # Start a worker by calling: CoopSnake.Worker.start_link(arg)
       # {CoopSnake.Worker, arg}
+      CoopSnake.Store,
+      CoopSnake.Monitor
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html
