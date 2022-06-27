@@ -4,13 +4,13 @@ defmodule CoopSnakeWeb.GameController do
   @impl true
   def mount(_params, _session, socket) do
     if connected?(socket) do
-      Phoenix.PubSub.subscribe(CoopSnake.PubSub, "toggled")
+      Phoenix.PubSub.subscribe(CoopSnake.PubSub, "tick")
       # CoopSnake.Monitor.monitor(self())
     end
 
     {
       :ok,
-      assign(socket, :board, CoopSnake.Board.value()),
+      assign(socket, :board, CoopSnake.Board.value() |> elem(0)),
       temporary_assigns: [board: %{}]
     }
   end
@@ -27,8 +27,9 @@ defmodule CoopSnakeWeb.GameController do
               id={id}
               class={class_names([
                 "h-10 w-10 outline outline-1",
-                {"bg-red-500", state == :off},
-                {"bg-green-500", state == :on},
+                {"bg-red-500", state == :food},
+                {"bg-green-500", state == :snake},
+                {"bg-slate-500", state == :empty}
               ])}
               phx-click="toggle"
               phx-value-id={id}
@@ -42,17 +43,17 @@ defmodule CoopSnakeWeb.GameController do
   end
 
   @impl true
-  def handle_event("toggle", %{"id" => id}, socket) do
-    CoopSnake.Board.toggle_cell(id)
+  def handle_event("toggle", _, socket) do
+    CoopSnake.Board.tick()
 
     {:noreply, socket}
   end
 
   @impl true
-  def handle_info({:toggled, {key, value}}, socket) do
+  def handle_info({:tick, changed_values}, socket) do
     {
       :noreply,
-      update(socket, :board, &Map.put(&1, key, value))
+      update(socket, :board, &Map.merge(&1, changed_values))
     }
   end
 
