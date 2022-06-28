@@ -1,13 +1,13 @@
 defmodule CoopSnake.Board do
   use GenServer
 
-  defstruct [:board, :food, :snake, :direction, :votes]
+  defstruct [:board, :food, :snake, :direction, :votes, :queued_segments]
 
   @board_size 9
 
   @directions [:up, :right, :down, :left]
 
-  @tick_length 5000
+  @tick_length 500
 
   def start_link(arg) do
     GenServer.start_link(__MODULE__, arg, name: __MODULE__)
@@ -19,7 +19,7 @@ defmodule CoopSnake.Board do
 
   @impl true
   def init(_) do
-    loop(now())
+    # loop(now())
 
     {:ok, new()}
   end
@@ -42,6 +42,17 @@ defmodule CoopSnake.Board do
   @impl true
   def handle_call(:state, _from, state) do
     {:reply, state, state}
+  end
+
+  @impl true
+  def handle_cast(:tick, state) do
+    # started_at = now()
+
+    state = tick(state)
+
+    # loop(started_at)
+
+    {:noreply, state}
   end
 
   @impl true
@@ -73,7 +84,8 @@ defmodule CoopSnake.Board do
       snake: :queue.in(snake_head, :queue.new()),
       food: food,
       direction: random_direction(),
-      votes: empty_votes()
+      votes: empty_votes(),
+      queued_segments: 0
     }
   end
 
@@ -121,7 +133,7 @@ defmodule CoopSnake.Board do
   end
 
   defp move_snake(%CoopSnake.Board{snake: snake, direction: direction} = state) do
-    {x, y} = :queue.head(snake)
+    {x, y} = :queue.daeh(snake)
 
     new_head =
       case direction do
@@ -131,44 +143,63 @@ defmodule CoopSnake.Board do
         :left -> {x - 1, y}
       end
 
-    case in_bounds?(new_head) do
+    case Map.has_key?(state.board, new_head) do
       true -> {:ok, {new_head, state}}
       _ -> {:error, {:out_of_bounds, state}}
     end
+    |> IO.inspect()
   end
 
-  defp move_food({:ok, {new_head, %CoopSnake.Board{food: food} = state}}) do
-    {{:value, tail}, snake} = :queue.out(state.snake)
-    snake = :queue.in(new_head, snake)
+  defp move_food({:ok, {new_head, %CoopSnake.Board{} = state}}) do
+    changeset = Map.new() |> Map.put(new_head, :snake)
 
-    changeset =
-      Map.new()
-      |> Map.put(tail, :empty)
-      |> Map.put(new_head, :snake)
+    snake = :queue.in(new_head, state.snake)
 
-    board = Map.merge(state.board, changeset)
-
-    {changeset, board} =
-      case new_head do
-        ^food ->
-          new_food =
-            Map.filter(board, fn {_, value} -> value == :empty end)
-            |> Enum.random()
-            # TODO: handle victory
-            |> elem(0)
-
-          changeset = Map.put(changeset, new_food, :food)
-          board = Map.put(board, new_food, :food)
-          {changeset, board}
-
-        _ ->
-          {changeset, board}
-      end
-
-    {:ok, changeset, %CoopSnake.Board{state | board: board, snake: snake}}
+    finalize_changeset(
+      new_head == state.food,
+      changeset,
+      %CoopSnake.Board{state | snake: snake}
+    )
   end
 
   defp move_food({:error, _} = failure), do: failure
+
+  defp finalize_changeset(true, changeset, %CoopSnake.Board{} = state) do
+    queued_segments = state.queued_segments + 2
+    board = Map.merge(state.board, changeset) |> IO.inspect(label: "board")
+    {new_food, _} = Enum.filter(board, fn {_, v} -> v == :empty end) |> Enum.random()
+    changeset = Map.put(changeset, new_food, :food)
+    board = Map.put(board, new_food, :food)
+
+    {
+      :ok,
+      changeset,
+      %CoopSnake.Board{state | board: board, queued_segments: queued_segments, food: new_food}
+    }
+  end
+
+  defp finalize_changeset(false, changeset, %CoopSnake.Board{queued_segments: 0} = state) do
+    {{:value, tail}, snake} = :queue.out(state.snake)
+    changeset = Map.put(changeset, tail, :empty)
+
+    {
+      :ok,
+      changeset,
+      %CoopSnake.Board{state | snake: snake, board: Map.merge(state.board, changeset)}
+    }
+  end
+
+  defp finalize_changeset(false, changeset, state) do
+    {
+      :ok,
+      changeset,
+      %CoopSnake.Board{
+        state
+        | queued_segments: state.queued_segments - 1,
+          board: Map.merge(state.board, changeset)
+      }
+    }
+  end
 
   defp notify({:ok, changeset, state}) do
     Phoenix.PubSub.broadcast(
@@ -188,14 +219,10 @@ defmodule CoopSnake.Board do
       |> Enum.map(fn {key, _value} -> {key, :empty} end)
       |> Map.new()
       |> Map.put(next.food, :food)
-      |> Map.put(:queue.head(next.snake), :snake)
+      |> Map.put(:queue.daeh(next.snake), :snake)
+      |> IO.inspect(label: "changeset")
 
     notify({:ok, changeset, next})
-  end
-
-  defp in_bounds?(location) do
-    {x, y} = location
-    x >= 0 && x <= @board_size && y >= 0 && y <= @board_size
   end
 
   def valid_direction?(:left, :left), do: true

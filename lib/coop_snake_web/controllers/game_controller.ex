@@ -39,6 +39,7 @@ defmodule CoopSnakeWeb.GameController do
                   {"bg-green-500", state == :snake},
                   {"bg-stone-500", state == :empty}
                 ])}
+                phx-click="tick"
               >
               </div>
             <% end %>
@@ -132,6 +133,13 @@ defmodule CoopSnakeWeb.GameController do
     GenServer.cast(CoopSnake.Board, {:vote, direction, socket.assigns.vote})
 
     {:noreply, update(socket, :vote, fn _ -> direction end)}
+  end
+
+  @impl true
+  def handle_event("tick", _, socket) do
+    GenServer.cast(CoopSnake.Board, :tick)
+
+    {:noreply, socket}
   end
 
   def class_names(list) do
