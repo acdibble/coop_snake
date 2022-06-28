@@ -5,12 +5,19 @@ defmodule CoopSnakeWeb.GameController do
   def mount(_params, _session, socket) do
     if connected?(socket) do
       Phoenix.PubSub.subscribe(CoopSnake.PubSub, "tick")
+      Phoenix.PubSub.subscribe(CoopSnake.PubSub, "votes")
       # CoopSnake.Monitor.monitor(self())
     end
 
+    state = GenServer.call(CoopSnake.Board, :state)
+
     {
       :ok,
-      assign(socket, :board, CoopSnake.Board.value() |> elem(0)),
+      socket
+      |> assign(:board, state.board)
+      |> assign(:direction, state.direction)
+      |> assign(:vote, nil)
+      |> assign(:votes, state.votes),
       temporary_assigns: [board: %{}]
     }
   end
@@ -21,21 +28,81 @@ defmodule CoopSnakeWeb.GameController do
     <div class="flex flex-col min-h-screen w-full items-center justify-center">
       <div class="flex flex-col space-y-5 items-center">
         <h1 class="underline text-3xl uppercase">Hello</h1>
-        <div id="board" class="grid grid-cols-10" phx-update="append">
-          <%= for {id, state} <- Enum.to_list(@board) |> Enum.sort() do %>
-            <div
-              id={id}
-              class={class_names([
-                "h-10 w-10 outline outline-1",
-                {"bg-red-500", state == :food},
-                {"bg-green-500", state == :snake},
-                {"bg-slate-500", state == :empty}
-              ])}
-              phx-click="toggle"
-              phx-value-id={id}
-            >
+        <div class="flex space-x-4">
+          <div id="board" class="grid grid-cols-10" phx-update="append">
+            <%= for {tuple, state} <- Enum.to_list(@board) |> Enum.sort_by(fn {{x,y}, _} -> {y, x} end) do %>
+              <div
+                id={CoopSnake.Board.location_to_id(tuple)}
+                class={class_names([
+                  "h-10 w-10 outline outline-1",
+                  {"bg-red-500", state == :food},
+                  {"bg-green-500", state == :snake},
+                  {"bg-stone-500", state == :empty}
+                ])}
+              >
+              </div>
+            <% end %>
+          </div>
+          <div class="flex flex-col space-y-5">
+            <span>Current direction: <%= @direction %></span>
+            <div class="grid grid-cols-3 w-40 h-40">
+              <div></div>
+              <button
+                type="button"
+                class={class_names([
+                  "border-[1px] border-black",
+                  {"bg-red-500", @vote == :up}
+                ])}
+                phx-click="vote"
+                phx-value-direction={:up}
+                disabled={!CoopSnake.Board.valid_direction?(@direction, :up)}
+              >
+              </button>
+              <div></div>
+              <button
+                type="button"
+                class={class_names([
+                  "border-[1px] border-black",
+                  {"bg-red-500", @vote == :left}
+                ])}
+                phx-click="vote"
+                phx-value-direction={:left}
+                disabled={!CoopSnake.Board.valid_direction?(@direction, :left)}
+              >
+              </button>
+              <div></div>
+              <button
+                type="button"
+                class={class_names([
+                  "border-[1px] border-black",
+                  {"bg-red-500", @vote == :right}
+                ])}
+                phx-click="vote"
+                phx-value-direction={:right}
+                disabled={!CoopSnake.Board.valid_direction?(@direction, :right)}
+              >
+              </button>
+              <div></div>
+              <button
+                type="button"
+                class={class_names([
+                  "border-[1px] border-black",
+                  {"bg-red-500", @vote == :down}
+                ])}
+                phx-click="vote"
+                phx-value-direction={:down}
+                disabled={!CoopSnake.Board.valid_direction?(@direction, :down)}
+              >
+              </button>
+              <div></div>
             </div>
-          <% end %>
+            <ul>
+              <li>Left: <%= @votes.left %></li>
+              <li>Right: <%= @votes.right %></li>
+              <li>Up: <%= @votes.up %></li>
+              <li>Down: <%= @votes.down %></li>
+            </ul>
+          </div>
         </div>
       </div>
     </div>
@@ -43,18 +110,28 @@ defmodule CoopSnakeWeb.GameController do
   end
 
   @impl true
-  def handle_event("toggle", _, socket) do
-    CoopSnake.Board.tick()
+  def handle_info({:tick, %{changeset: changeset, direction: direction}}, socket) do
+    socket =
+      update(socket, :board, &Map.merge(&1, changeset))
+      |> update(:direction, fn _ -> direction end)
+      |> update(:vote, fn _ -> nil end)
+      |> update(:votes, fn _ -> CoopSnake.Board.empty_votes() end)
 
     {:noreply, socket}
   end
 
   @impl true
-  def handle_info({:tick, changed_values}, socket) do
-    {
-      :noreply,
-      update(socket, :board, &Map.merge(&1, changed_values))
-    }
+  def handle_info({:votes, votes}, socket) do
+    {:noreply, update(socket, :votes, fn _ -> votes end)}
+  end
+
+  @impl true
+  def handle_event("vote", %{"direction" => direction}, socket) do
+    direction = String.to_existing_atom(direction)
+
+    GenServer.cast(CoopSnake.Board, {:vote, direction, socket.assigns.vote})
+
+    {:noreply, update(socket, :vote, fn _ -> direction end)}
   end
 
   def class_names(list) do
