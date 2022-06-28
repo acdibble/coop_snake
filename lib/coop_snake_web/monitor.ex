@@ -9,6 +9,14 @@ defmodule CoopSnake.Monitor do
     GenServer.call(__MODULE__, {:monitor, pid})
   end
 
+  def track_vote(pid, vote) do
+    GenServer.cast(__MODULE__, {:vote, pid, vote})
+  end
+
+  def clear() do
+    GenServer.cast(__MODULE__, :clear)
+  end
+
   @impl true
   def init(map) do
     {:ok, map}
@@ -17,15 +25,25 @@ defmodule CoopSnake.Monitor do
   @impl true
   def handle_call({:monitor, pid}, _from, map) do
     Process.monitor(pid)
-    CoopSnake.Store.increment(:user_count)
     {:reply, :ok, map}
   end
 
   @impl true
   def handle_info({:DOWN, _ref, :process, pid, _reason}, map) do
-    # {driver_id, map} = Map.pop(map, socket_pid)
-    IO.inspect(pid, label: "disconnect")
-    CoopSnake.Store.decrement(:user_count)
-    {:noreply, map}
+    {vote, new_state} = Map.pop(map, pid)
+
+    CoopSnake.Board.unvote(vote)
+
+    {:noreply, new_state}
+  end
+
+  @impl true
+  def handle_cast({:vote, pid, vote}, map) do
+    {:noreply, Map.put(map, pid, vote)}
+  end
+
+  @impl true
+  def handle_cast(:clear, _map) do
+    {:noreply, %{}}
   end
 end

@@ -56,6 +56,15 @@ defmodule CoopSnake.Board do
   end
 
   @impl true
+  def handle_cast({:unvote, vote}, state) do
+    votes = Map.update!(state.votes, vote, &(&1 - 1))
+
+    Phoenix.PubSub.broadcast(CoopSnake.PubSub, "votes", {:votes, votes})
+
+    {:noreply, %CoopSnake.Board{state | votes: votes}}
+  end
+
+  @impl true
   def handle_cast({:vote, new_vote, old_vote}, state) do
     votes =
       case old_vote do
@@ -95,6 +104,17 @@ defmodule CoopSnake.Board do
     |> move_snake()
     |> move_food()
     |> notify()
+  end
+
+  def unvote(nil) do
+  end
+
+  def unvote(direction) do
+    GenServer.cast(__MODULE__, {:unvote, direction})
+  end
+
+  def track_vote(new_direction, previous_direction) do
+    GenServer.cast(__MODULE__, {:vote, new_direction, previous_direction})
   end
 
   defp random_location() do
@@ -147,7 +167,6 @@ defmodule CoopSnake.Board do
       true -> {:ok, {new_head, state}}
       _ -> {:error, {:out_of_bounds, state}}
     end
-    |> IO.inspect()
   end
 
   defp move_food({:ok, {new_head, %CoopSnake.Board{} = state}}) do
@@ -166,7 +185,7 @@ defmodule CoopSnake.Board do
 
   defp finalize_changeset(true, changeset, %CoopSnake.Board{} = state) do
     queued_segments = state.queued_segments + 2
-    board = Map.merge(state.board, changeset) |> IO.inspect(label: "board")
+    board = Map.merge(state.board, changeset)
     {new_food, _} = Enum.filter(board, fn {_, v} -> v == :empty end) |> Enum.random()
     changeset = Map.put(changeset, new_food, :food)
     board = Map.put(board, new_food, :food)
@@ -208,6 +227,8 @@ defmodule CoopSnake.Board do
       {:tick, %{changeset: changeset, direction: state.direction}}
     )
 
+    CoopSnake.Monitor.clear()
+
     state
   end
 
@@ -220,7 +241,6 @@ defmodule CoopSnake.Board do
       |> Map.new()
       |> Map.put(next.food, :food)
       |> Map.put(:queue.daeh(next.snake), :snake)
-      |> IO.inspect(label: "changeset")
 
     notify({:ok, changeset, next})
   end

@@ -6,7 +6,7 @@ defmodule CoopSnakeWeb.GameController do
     if connected?(socket) do
       Phoenix.PubSub.subscribe(CoopSnake.PubSub, "tick")
       Phoenix.PubSub.subscribe(CoopSnake.PubSub, "votes")
-      # CoopSnake.Monitor.monitor(self())
+      CoopSnake.Monitor.monitor(self())
     end
 
     state = GenServer.call(CoopSnake.Board, :state)
@@ -130,7 +130,8 @@ defmodule CoopSnakeWeb.GameController do
   def handle_event("vote", %{"direction" => direction}, socket) do
     direction = String.to_existing_atom(direction)
 
-    GenServer.cast(CoopSnake.Board, {:vote, direction, socket.assigns.vote})
+    CoopSnake.Board.track_vote(direction, socket.assigns.vote)
+    CoopSnake.Monitor.track_vote(self(), direction)
 
     {:noreply, update(socket, :vote, fn _ -> direction end)}
   end
