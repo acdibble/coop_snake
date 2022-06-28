@@ -50,7 +50,7 @@ defmodule CoopSnakeWeb.GameController do
               <button
                 type="button"
                 class={class_names([
-                  "border-[1px] border-black",
+                  "border-[1px] border-black disabled:bg-slate-200",
                   {"bg-red-500", @vote == :up}
                 ])}
                 phx-click="vote"
@@ -62,7 +62,7 @@ defmodule CoopSnakeWeb.GameController do
               <button
                 type="button"
                 class={class_names([
-                  "border-[1px] border-black",
+                  "border-[1px] border-black disabled:bg-slate-200",
                   {"bg-red-500", @vote == :left}
                 ])}
                 phx-click="vote"
@@ -74,7 +74,7 @@ defmodule CoopSnakeWeb.GameController do
               <button
                 type="button"
                 class={class_names([
-                  "border-[1px] border-black",
+                  "border-[1px] border-black disabled:bg-slate-200",
                   {"bg-red-500", @vote == :right}
                 ])}
                 phx-click="vote"
@@ -86,7 +86,7 @@ defmodule CoopSnakeWeb.GameController do
               <button
                 type="button"
                 class={class_names([
-                  "border-[1px] border-black",
+                  "border-[1px] border-black disabled:bg-slate-200",
                   {"bg-red-500", @vote == :down}
                 ])}
                 phx-click="vote"

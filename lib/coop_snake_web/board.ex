@@ -7,6 +7,8 @@ defmodule CoopSnake.Board do
 
   @directions [:up, :right, :down, :left]
 
+  @tick_length 5000
+
   def start_link(arg) do
     GenServer.start_link(__MODULE__, arg, name: __MODULE__)
   end
@@ -23,7 +25,7 @@ defmodule CoopSnake.Board do
   end
 
   defp loop(started_at) do
-    Process.send_after(self(), :tick, 500 - (now() - started_at))
+    Process.send_after(self(), :tick, @tick_length - (now() - started_at))
   end
 
   @impl true
@@ -97,25 +99,23 @@ defmodule CoopSnake.Board do
 
   def empty_votes(), do: %{left: 0, right: 0, up: 0, down: 0}
 
-  defp compare_votes(a, b) do
+  defp decide_winner({_, count_a} = a, {_, count_b} = b, mode) do
     cond do
-      a == b -> :eq
-      a > b -> :gt
-      a < b -> :lt
+      count_a == count_b && mode == :random -> Enum.random([a, b])
+      count_a == count_b && mode == :last -> b
+      count_a > count_b -> a
+      count_a < count_b -> b
     end
   end
 
   defp decide_election(%CoopSnake.Board{direction: direction, votes: votes} = state) do
-    [{option_one, count_one}, {option_two, count_two}] =
+    [a, b] =
       Enum.filter(votes, fn {dir, _} -> valid_direction?(direction, dir) && dir != direction end)
       |> Enum.to_list()
 
-    winner =
-      case compare_votes(count_one, count_two) do
-        :eq -> direction
-        :gt -> option_one
-        :lt -> option_two
-      end
+    {winner, _} =
+      decide_winner(a, b, :random)
+      |> decide_winner({direction, votes[direction]}, :last)
 
     %CoopSnake.Board{state | votes: empty_votes(), direction: winner}
   end
